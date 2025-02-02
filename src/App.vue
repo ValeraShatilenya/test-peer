@@ -1,13 +1,54 @@
+<template>
+  <div class="h-screen flex flex-col py-2 px-3">
+    <div
+      v-if="peerId"
+      class="grid grid-cols-[auto_1fr] gap-2 items-center mb-2"
+    >
+      <BaseButton @click="copyPeerId">{{ peerId }} </BaseButton>
+      <TextInput
+        v-model="otherPeerId"
+        placeholder="ID другого узла..."
+        button-text="Соединиться"
+        @button-click="connectToNode"
+      />
+    </div>
+    <div class="bg-gray-200 space-y-2 flex-1 overflow-y-auto px-4 py-2">
+      <div
+        v-for="{ text, from } in messages"
+        class="rounded-lg p-2 shadow-sm w-fit"
+        :class="{
+          'bg-white': from === 'other',
+          'ml-auto bg-blue-500 text-white': from === 'me',
+          'mx-auto': !from,
+        }"
+      >
+        {{ text }}
+      </div>
+    </div>
+    <div class="flex items-center gap-4 mt-2">
+      <TextInput
+        v-model="message"
+        placeholder="Напишите сообщение..."
+        button-text="Отправить"
+        :disabled="!conn"
+        @button-click="sendMess"
+      />
+    </div>
+  </div>
+</template>
+
 <script setup>
 import { Peer } from "peerjs";
-import { ref } from "vue";
+import { ref, shallowRef } from "vue";
+import TextInput from "./components/TextInput.vue";
+import BaseButton from "./components/BaseButton.vue";
 
-const messList = ref([]);
+const messages = ref([]);
 const message = ref("");
 const peer = new Peer();
 const otherPeerId = ref("");
 const peerId = ref("");
-let conn; //переменная, хранящая соединение
+const conn = shallowRef(null); //переменная, хранящая соединение
 
 peer.on("open", function (p) {
   peerId.value = p;
@@ -15,54 +56,41 @@ peer.on("open", function (p) {
 
 peer.on("connection", function (c) {
   //входящее соединение...
-  conn = c;
+  conn.value = c;
   initConn();
 });
 
 function addMess(mess) {
-  messList.value.push(mess);
+  messages.value.push(mess);
 }
 
 function connectToNode() {
   //исходящее соединение...
-  conn = peer.connect(otherPeerId.value);
+  conn.value = peer.connect(otherPeerId.value);
   initConn();
 }
 
 function initConn() {
-  conn.on("open", function () {
+  conn.value.on("open", function () {
     //открыто соединение
-    addMess("<div><h4>Соединение установлено</h4></div>");
-    conn.on("data", function (data) {
+    addMess({ text: "Соединение установлено" });
+    conn.value.on("data", function (text) {
       //прилетело сообщение
-      addMess("<div><b>Партнер: </b>" + data + "</div>");
+      addMess({ text, from: "other" });
     });
   });
-  conn.on("close", function () {
-    addMess("-----------Соединение разорвано-------------");
+  conn.value.on("close", function () {
+    addMess({ text: "Соединение разорвано" });
   });
 }
 
 function sendMess() {
-  addMess("<div><b>Я: </b>" + message.value + "</div>");
-  conn.send(message.value);
+  addMess({ text: message.value, from: "me" });
+  conn.value.send(message.value);
   message.value = "";
 }
-</script>
 
-<template>
-  <div>
-    <h3>
-      Мой ID: <span>{{ peerId }}</span>
-    </h3>
-    <input v-model="otherPeerId" type="text" />
-    <button @click="connectToNode">Соединиться</button>
-    <div>
-      {{ messList }}
-    </div>
-    <br />
-    <textarea v-model="message" />
-    <br />
-    <button @click="sendMess">Отправить</button>
-  </div>
-</template>
+const copyPeerId = () => {
+  navigator.clipboard.writeText(peerId.value);
+};
+</script>
